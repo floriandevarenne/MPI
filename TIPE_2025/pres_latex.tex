@@ -1,0 +1,815 @@
+\documentclass{beamer}
+\usepackage{bussproofs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{appendixnumberbeamer}
+\usepackage{tikz}
+\usetikzlibrary{fit}
+\usepackage{forest}
+\usetikzlibrary{shapes.rounded, arrows.meta, positioning}
+\date{}
+
+
+% Styles des bulles et flèches
+\tikzstyle{bulle} = [
+  rounded rectangle,
+  draw=blue!70,
+  fill=blue!10,
+  thick,
+  minimum height=1.9cm,
+  text centered,
+  align=center,          % ← permet les sauts de ligne
+  font=\normalize,
+  text width=2.5cm         % ← limite la largeur (important si tu veux forcer des sauts de ligne naturels)
+]
+\tikzstyle{fleche} = [-{Latex[length=3mm]}, thick]
+
+\tikzstyle{bulle2} = [
+  rounded rectangle,
+  draw=blue!70,
+  fill=blue!10,
+  thick,
+  minimum height=1.9cm,
+  text centered,
+  align=center,          % ← permet les sauts de ligne
+  font=\normalize,
+  text width=5cm         % ← limite la largeur (important si tu veux forcer des sauts de ligne naturels)
+]
+
+
+
+
+\setbeamertemplate{footline}[frame number]
+
+\title{Formalisation des démonstrations pour l'étude des possibilités informatiques d'assistant de preuves.}
+\author{Florian DEVARENNE \texorpdfstring{\\}{, }
+       n°45154
+       }     
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\section{Introduction}
+
+\begin{frame}{Introduction}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Kurt-Gödel}
+        \caption{Kurt Gödel}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{Gerhard_Gentzen}
+        \caption{Gerhard Gentzen}
+    \end{minipage} 
+\end{frame}
+
+
+
+\begin{frame}{Origine de ma réflexion}
+
+\begin{center}
+\resizebox{1.08\textwidth}{!}{ % <-- redimensionne tout le schéma à 95% de la largeur
+\begin{tikzpicture}[node distance=1.8cm and 1.5cm]
+
+% Ligne principale horizontale
+\node[bulle] (godel) {Théorèmes d'incomplétudes\\ de Gödel};
+\node[bulle, right=of godel] (limites) {Limites des assistants};
+\node[bulle, right=of limites] (creation) {Créer un assistant ?};
+
+% Bulles en dessous
+\node[bulle, below left=of creation] (formalisation) {Formalisation des \\ démonstrations};
+\node[bulle, below=of creation] (verificateur) {Vérificateur de \\ preuves};
+\node[bulle, below right=of creation] (chercheur) {Chercheur de \\ preuves};
+
+% Flèches
+\draw[fleche] (godel) -- (limites);
+\draw[fleche] (limites) -- (creation);
+\draw[fleche] (creation) -- (formalisation);
+\draw[fleche] (creation) -- (verificateur);
+\draw[fleche] (creation) -- (chercheur);
+
+\end{tikzpicture}
+}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{Problématique et Ancrage au thème}
+  \begin{block}{Problématique}
+    Comment formaliser et implémenter un moteur de vérification de preuve en \textbf{déduction naturelle} en \texttt{OCaml}, tout en facilitant la compréhension des preuves grâce à une \textbf{traduction en langage naturel} ?
+  \end{block}
+
+    \vspace{0.8cm}
+
+  \begin{block}{Lien avec le thème}
+    \textbf{Transition}, \textbf{Transformation}, \textbf{Conversion} :
+    \begin{itemize}
+      \item Formalisation d'une preuve 
+      \item Transformation d'un arbre de preuve en preuve en français (traducteur)
+    \end{itemize}
+  \end{block}
+\end{frame}
+
+
+
+\begin{frame}{Sommaire}
+    \tableofcontents
+\end{frame}
+
+
+\begin{frame}
+  \centering
+  \vfill
+  {\LARGE \textbf{ Préliminaires : Déduction naturelle et Choix d'implémentation}}
+  \vfill
+\end{frame}
+
+
+
+\section{P - Déduction Naturelle}
+
+\subsection{Présentation du système et vocabulaire}
+
+
+\begin{frame}{La déduction naturelle}
+    \begin{block}{Déduction naturelle}
+    \begin{itemize}
+        \item système formalisant les démonstrations
+        \item reposant sur des règles de déduction
+    \end{itemize}
+    
+    \end{block}
+
+    \begin{block}{Pour mon projet en particulier}
+    \begin{itemize}
+        \item Calcul propositionnel (pas de {& \forall&} ,  {& \exists&})
+    \end{itemize}
+    
+    \end{block}
+
+    
+
+
+    \vspace{2cm}
+
+    \begin{minipage}{0.7\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{illu}
+    \end{minipage}
+
+\end{frame}
+
+
+\begin{frame}{Une règle et un séquent en détail}
+
+    \begin{itemize}
+        \item Une règle d'élimination et d'introduction pour {$\land , \lor ,\neg , \to$}
+        \item Une règle pour l'absurdité et l'affaiblissement
+    \end{itemize}
+  
+
+    \begin{prooftree}
+        \RightLabel{($\to$ i)}
+        \AxiomC{$\Gamma , A \vdash B$}
+        \UnaryInfC{$\Gamma \vdash A \to B$}
+    \end{prooftree}
+
+    \vspace{0.5cm}
+
+    \begin{prooftree}
+        \RightLabel{($\to$ e)}
+        \AxiomC{$\Gamma \vdash A$}
+        \AxiomC{$\Gamma \vdash A \to B$}
+        \BinaryInfC{$\Gamma \vdash B$}
+    \end{prooftree}
+
+    \vspace{1cm}
+
+    Un séquent : 
+    \begin{prooftree}
+        
+    
+    {$\Gamma \vdash A \to B$}
+
+    \end{prooftree}
+
+    
+\end{frame}
+
+
+
+
+\begin{frame}{un exemple de preuve courte}
+
+    \begin{prooftree}       
+        \RightLabel{(Ax)}
+        \AxiomC{}
+        \UnaryInfC{$\neg A,A \vdash A$}
+        \RightLabel{(Ax)}
+        \AxiomC{}
+        \UnaryInfC{$\neg A , A \vdash \neg A$}
+        \RightLabel{($\neg$ e)}
+        \BinaryInfC{$\neg A , A \vdash \bot$}
+        \RightLabel{($\to$ i)}
+        \UnaryInfC{$\neg A \vdash (A \to \bot)$}
+        \RightLabel{($\to$ i)}
+        \UnaryInfC{$\vdash\ \neg A \to (A \to \bot)$}
+        
+    \end{prooftree}
+
+\end{frame}
+
+
+\subsection{Implémentation du système en OCaml}
+
+\begin{frame}{Choix d'implémentation}
+
+    \begin{minipage}{0.48\textwidth}
+        \begin{itemize}
+            \item Type enregistrement/structuré pour sequent et regle
+            \vspace{0.4cm}
+            \item Type somme pour Formule
+            \vspace{0.4cm}
+            \item Structure d'arbre pour demonstration
+        \end{itemize}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{deftype}
+    \end{minipage} 
+    
+    
+\end{frame}
+
+
+
+\section{I - Vérificateur de preuve}
+
+
+\begin{frame}
+  \centering
+  \vfill
+  {\LARGE \textbf{Objectif 1: Vérificateur de preuve}}
+  \vfill
+\end{frame}
+
+
+\begin{frame}{Première objectif : vérificateur de preuve}
+
+    On veut construire une fonction OCaml de signature demonstration {& \to &} bool
+
+
+    \begin{block}{Pour y arriver : }
+    \begin{itemize}
+        \item Quelle règle doit respecter une preuve ?
+        \item Vérifier ces points facilement en fonction de nos choix d'implémentation
+    \end{itemize}
+    
+    \end{block}
+
+    
+
+
+
+\end{frame}
+
+\subsection{Principe de fonctionnement}
+
+
+
+
+
+
+
+
+\begin{frame}{Principe de fonctionnement}
+
+    \begin{block}{Vérification de validité}
+        \begin{itemize}
+            \item Pour chaque lien entre les règles : conclusion de la règle du dessus correspond à l'une des prémisses de la règle d'en dessous
+            \item Les feuilles de l'arbre sont des "Axiomes"
+            \item Précondition : utilisation des règles implémentées uniquement
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.8cm}
+
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{verificateur}
+    \end{minipage}
+    
+\end{frame}
+
+
+
+
+
+
+
+\begin{frame}{Visualisation de l'arbre de preuve}
+
+\begin{center}
+\resizebox{1.05\textwidth}{!}{ % Ajuste la taille du schéma
+\begin{tikzpicture}[node distance=1.8cm and 2cm]
+
+
+% Noeuds
+\node[bulle2] (regle1) {
+    \begin{prooftree}
+        \RightLabel{(intro et)}
+        \AxiomC{$A,B \vdash B$}
+        \AxiomC{$A,B \vdash A$}
+        \BinaryInfC{$A,B \vdash A \land B$}
+    \end{prooftree}
+};
+
+
+
+\node[bulle, above left=of regle1] (regle2) {
+    \begin{prooftree}
+        \RightLabel{(Ax)}
+        \AxiomC{}
+        \UnaryInfC{$\ A,B \vdash A$}
+    \end{prooftree}
+};
+\node[bulle, above right=of regle1] (regle3) {
+    \begin{prooftree}
+        \RightLabel{(Ax)}
+        \AxiomC{}
+        \UnaryInfC{$\ A,B \vdash B$}
+    \end{prooftree}
+};
+
+% Flèches vers le haut
+\draw[fleche] (regle1) -- (regle2);
+\draw[fleche] (regle1) -- (regle3);
+
+\end{tikzpicture}
+}
+\end{center}
+
+\end{frame}
+
+
+\subsection{Exemple d'utilisation}
+
+\begin{frame}{Test de notre verificateur sur nos exemples}
+
+    \begin{block}{Vérification de la preuve des séquents : }
+    \begin{itemize}
+        \item {&A, B  \vdash  A \land B   &}
+        
+        \item {$\vdash\ \neg A \to (A \to \bot)$}  
+    \end{itemize}
+        
+    \end{block}
+
+    \vspace{1cm}
+
+    \begin{block}{Résultat des tests}
+
+
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{resultat}
+    \end{minipage}      
+    \end{block}
+
+
+    
+\end{frame}
+
+
+\section{II - Traducteur/Assistant de preuve}
+
+
+\begin{frame}
+  \centering
+  \vfill
+  {\LARGE \textbf{Objectif 2: Traducteur/Assistant de preuve}}
+  \vfill
+\end{frame}
+
+
+
+\begin{frame}{Deuxième objectif : traducteur/assistant de preuve}
+
+
+
+    On veut construire une fonction OCaml de signature \\sequent {$ \to $} bool
+
+    \vspace{1cm}
+
+    \begin{block}{Pour y arriver : }
+    \begin{itemize}
+        \item aide l'utilisateur à créer une preuve étape par étape
+        \item traduction en français des regles 
+        \item implémenter afin de facilité la vérification par notre programme précédent
+        \end{itemize}
+    
+    \end{block}
+
+    
+
+
+    
+\end{frame}
+
+\subsection{Principe de fonctionnement}
+
+\begin{frame}{Principe de fonctionnement}
+
+    \begin{block}{Découpage en étape}
+    \begin{itemize}
+        \item Fonction construction\_demo : sequent {$\to$} demonstration
+        \item Fonction assistant ci-dessous
+    \end{itemize}
+        
+    \end{block}
+
+
+    \vspace{1.5cm}
+
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{assis2}
+    \end{minipage} 
+
+         
+
+\end{frame}
+
+
+\begin{frame}{Fonctionnement pratique}
+
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{forme_assis}
+    \end{minipage} 
+    
+    
+\end{frame}
+
+\subsection{Exemple d'utilisation}
+
+
+\begin{frame}{Test sur exemple}
+    \begin{block}{On montre le séquent {$A , B \vdash A \land B$}}
+    \begin{itemize}
+        \item On commence par choisir la règle {$\land i$}
+        \item Le programme nous demande donc de prouver {$A , B \vdash A$} puis {$A, B \vdash B$}
+        \item On prouve ces deux séquents avec axiome 
+        \item Fin, on obtient le résultat : 
+    \end{itemize}
+  
+    \end{block}
+
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{result_assis}
+    \end{minipage} 
+\end{frame}
+
+\begin{frame}{Test sur exemple}
+    \begin{block}{La preuve en français donné par notre programme}
+        On veut montrer {$A \land B$} en supposant B , A or B , A permet individuellement de montrer A et aussi B donc on a {$A \land B$} \\
+        On veut montrer A en supposant B ,  A 
+        puis ce qu'on le suppose, on a bien A \\
+        On veut montrer B en supposant B ,  A 
+        puis ce qu'on le suppose, on a bien B 
+
+
+        
+    \end{block}
+    
+\end{frame}
+
+
+\section{Conclusion}
+
+
+\begin{frame}
+  \centering
+  \vfill
+  {\LARGE \textbf{Conclusion et Ouverture}}
+  \vfill
+\end{frame}
+
+
+
+\begin{frame}{Les assistants de nos jours}
+
+    
+    \begin{itemize}
+        \item Coq, Isabelle , Lean
+        \item Méthode complexe : Tableaux, Unifications
+        \item IA ?
+        \item Utilisation 
+    \end{itemize}
+    
+\end{frame}
+
+
+\begin{frame}{Retours et Critiques}
+
+    \begin{block}{Points positifs}
+        \begin{itemize}
+            \item Résultats satisfaisants
+            \item Fonctionne pour tout séquent de calcul propositionnel
+        \end{itemize}        
+    \end{block}
+    \vspace{1cm}
+    \begin{block}{Axes d'amélioration}
+        \begin{itemize}
+            \item Meilleure interface utilisateur
+            \item Aide pour la preuve autre que traduction
+            \item Implémentation moins lourde
+        \end{itemize}
+        
+    \end{block}
+    
+    
+    
+\end{frame}
+
+
+
+
+
+
+
+
+
+\begin{frame}{Conclusion}
+    \begin{flushright}
+        \textit{« Pour rêver à l'infini des nombres, il faudra toujours des mathématiciennes et des mathématiciens. »}\\
+         \vspace{1cm}
+        \small{- Arte, Voyage au pays des maths , L' Entscheidungsproblem ou la fin des mathématiques ?}
+    \end{flushright}
+\end{frame}
+
+
+\section{Annexe}
+
+\appendix
+
+
+
+\begin{frame}
+  \centering
+  \vfill
+  {\LARGE \textbf{Annexe : code et tests}}
+  \vfill
+\end{frame}
+
+
+\begin{frame}{Règle p1}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{regle1}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Règle p2}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{regle2}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Test de l'assistant p1}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test1}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Test de l'assistant p2}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test2}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Test de l'assistant p3}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test3}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Test de l'assistant p4}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test4}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Test de l'assistant p5}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test5}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Test de l'assistant p6}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{test6}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Code p1}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code1}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p2}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code2}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p3}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code3}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p4}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code4}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p5}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code5}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p6}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code6}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p7}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code7}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p8}
+    \begin{minipage}{1.2\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code8}
+    \end{minipage} 
+    
+\end{frame}
+
+
+
+
+\begin{frame}{Code p9}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code9}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p10}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code10}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p11}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code11}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p12}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code12}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Code p13}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code13}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p14}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code14}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p15}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code15}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p16}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code16}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Code p17}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code17}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Code p18}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code18}
+    \end{minipage} 
+    
+\end{frame}
+
+\begin{frame}{Code p19}
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code19}
+    \end{minipage} 
+    
+\end{frame}
+
+
+\begin{frame}{Code p20}
+    \begin{minipage}{1.05\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{code20}
+    \end{minipage} 
+    
+\end{frame}
+
+
+
+
+
+
+
+
+\end{document}
